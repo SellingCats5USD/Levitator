@@ -1,0 +1,56 @@
+import matplotlib.pyplot as plt
+import numpy as np
+
+# Simulate TinyLev
+# Want to place sources in concentric circles at different heights along the boundary of a sphere
+# It increases by sqrt(x^2+y^2) = r, right?7
+
+# Parameters
+R = 1 # sphere radius (cm)
+heightDiff = 0.05 # between each concentric circle
+h = 0.03 # initial height
+num_circles = 16 # num of concentric circles
+density = 3 # not gonna be constant / should be a list 6, 12, 19 for the TinyLev
+#pitch = # distances between points
+pointList = [6, 12, 19]
+
+# Generate circles / dunno why that happens first?
+fig = plt.figure()
+ax = fig.add_subplot(111, projection="3d")
+
+def sphereConstructor(pointList=None, density=None, num_circles=None):
+# Spherical coordinates
+    if pointList:
+        for j, points in enumerate(pointList):
+
+            z = -R + (j * heightDiff) + h # start at -R height / bottom
+
+            r = np.sqrt(R**2 - z**2) # radius of circle/cross section at height z
+            theta = np.linspace(0, 2 * np.pi, pointList[j])
+            
+            x = r * np.cos(theta)
+            y = r * np.sin(theta)
+
+            ax.scatter(x, y, np.full_like(x,z), label=f"circle at z={z:.2f}", s=320)
+    elif density and num_circles:
+        for j in range(num_circles):
+            z = (j * heightDiff) -R + h # start at -R height / bottom
+            r = np.sqrt(R**2 - z**2) # radius of circle/cross section at height z
+            points_per_circle = max(3, int((2 * np.pi * r) * density))
+            theta = np.linspace(0, 2 * np.pi, points_per_circle)
+            
+            x = r * np.cos(theta)
+            y = r * np.sin(theta)
+
+            ax.scatter(x, y, z, label=f"circle at z={z:.2f}")
+    
+
+sphereConstructor(pointList)
+#sphereConstructor(density=2, num_circles=17)
+
+ax.set_xlabel("X")
+ax.set_ylabel("Y")
+ax.set_zlabel("Z")
+ax.set_box_aspect([1, 1, 1])  # Equal scaling for x, y, z
+#ax.set_aspect('auto')  # Makes the axes auto-adjusted
+plt.show()

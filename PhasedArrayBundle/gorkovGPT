@@ -1,0 +1,39 @@
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Parameters
+f = 40e3  # Frequency (Hz)
+c = 343   # Speed of sound (m/s)
+wavelength = c / f
+k = 2 * np.pi / wavelength
+d = 0.1  # Distance between arrays (m)
+A = 1    # Amplitude
+
+# Grid
+x = np.linspace(-0.1, 0.1, 500)
+y = np.linspace(-0.05, 0.15, 500)
+X, Y = np.meshgrid(x, y)
+
+# Transducer positions
+transducer_positions = np.linspace(-0.05, 0.05, 8)
+arrays = [0, d]  # Array positions (y = 0, y = d)
+
+# Calculate pressure field
+p_total = np.zeros_like(X, dtype=np.complex128)
+for y_array in arrays:
+    for x_trans in transducer_positions:
+        r = np.sqrt((X - x_trans)**2 + (Y - y_array)**2)
+        phase = -k * r
+        p_total += A * np.exp(1j * phase)
+
+# Compute magnitude (time-averaged)
+p_magnitude = np.abs(p_total)
+
+# Plot
+plt.figure(figsize=(10, 6))
+plt.pcolormesh(X, Y, p_magnitude, shading='auto', cmap='viridis')
+plt.colorbar(label="Pressure Amplitude")
+plt.xlabel("x (m)")
+plt.ylabel("y (m)")
+plt.title("Pressure Field from Sandwiched Phased Arrays")
+plt.show()

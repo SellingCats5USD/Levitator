@@ -1,0 +1,138 @@
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Parameters
+speed_of_sound = 343.0
+frequency = 40e3
+wavelength = speed_of_sound / frequency
+k = 2 * np.pi / wavelength
+
+N = 20      # transducers per layer
+M = 3       # focus points
+P = 1.5 * wavelength    # pitch
+L = P * N 
+h = 15 * P  # reduced height to make focusing easier
+
+iterations = 100
+
+# Bottom layer at y=0
+x_bottom = np.linspace(-L/2, L/2, N)
+y_bottom = np.zeros_like(x_bottom)
+
+# Top layer at y=h
+x_top = x_bottom.copy()
+y_top = np.full_like(x_top, h)
+
+# Combine both layers       
+x_trans = np.concatenate((x_bottom, x_top))
+y_trans = np.concatenate((y_bottom, y_top))
+N_total = len(x_trans)  # should be 2*N
+
+target_points = []
+for i in range(M):
+    point= [
+        -L/2 + np.random.random() * L, h/2 + -np.random.random() * h/2 + np.random.random() * h/2
+    ]
+    target_points.append(point)
+# Convert the target_points list to a NumpyArray
+target_points = np.array(target_points)
+
+
+desired_amplitudes = np.ones(M, dtype=complex)
+
+# Build F without 1/d to see clear patterns
+F = np.zeros((M, N_total), dtype=complex)
+for j in range(M):
+    for i in range(N_total):
+        dx = target_points[j,0] - x_trans[i]
+        dy = target_points[j,1] - y_trans[i]
+        d = np.sqrt(dx*dx + dy*dy)
+        F[j, i] = np.exp(1j * k * d)  # no 1/d for clarity
+#print("F=", F)
+# Compute pseudoinverse
+Fdagger = np.linalg.pinv(F)
+print("Fdagger=", Fdagger)
+
+# Desired target field:
+# For simplicity, all amplitude=1, phase=0
+zeta_desired = desired_amplitudes # =1 with zero phase
+
+# Start from a direct solution (no iteration)
+tau_initial = Fdagger @ zeta_desired
+tau = np.exp(1j * np.angle(tau_initial))  # enforce unit amplitude
+# store first tau 
+tau_1 = tau = np.exp(1j * np.angle(tau_initial)) 
+
+def measure_error(tau):
+    z_calc = F @ tau
+    # Compare amplitude difference
+    amp_error = np.mean(np.abs(np.abs(z_calc) - np.abs(zeta_desired)))
+    return amp_error
+
+print("Initial error:", measure_error(tau))
+initial_error = measure_error(tau)
+
+# Try GS-like iterations with a relaxation factor
+alpha = 0.25  # relaxation factor
+for it in range(iterations):
+    zeta_calc = F @ tau
+    # Enforce amplitudes at target
+    zeta_new = np.abs(zeta_desired) * np.exp(1j * np.angle(zeta_calc))
+    tau_back = Fdagger @ zeta_new
+    tau_new = np.exp(1j * np.angle(tau_back))
+    
+    # Relaxation: blend old and new phases slightly
+    tau = np.exp(1j * ((1 - alpha)*np.angle(tau) + alpha*np.angle(tau_new)))
+    
+    if it % 10 == 0:
+        err = measure_error(tau)
+        print(f"Iteration {it}, error: {err}")
+
+final_error = measure_error(tau)
+print("Initial error:", initial_error)
+print("Final error:", final_error)
+
+
+# Visualize field
+X = np.linspace(-L/2, L/2, 500)
+Y = np.linspace(0.0, h, 500)
+XX, YY = np.meshgrid(X, Y)
+field = np.zeros_like(XX, dtype=complex)
+field_1 = np.zeros_like(XX, dtype=complex)
+
+# Use the initial tau
+for i in range(N_total):
+    dx = XX - x_trans[i]
+    dy = YY - y_trans[i]
+    d = np.sqrt(dx*dx + dy*dy)
+    # Also no 1/d here for visualization clarity
+    field_1 += tau_1[i] * (np.exp(1j * k * d))
+
+# Use the final tau
+for i in range(N_total):
+    dx = XX - x_trans[i]
+    dy = YY - y_trans[i]
+    d = np.sqrt(dx*dx + dy*dy)
+    # Also no 1/d here for visualization clarity
+    field += tau[i] * (np.exp(1j * k * d))
+
+intensity_1 = np.abs(field_1)**2
+intensity = np.abs(field)**2
+print("Intensity range:", intensity.min(), intensity.max())
+
+# Assuming XX, YY, intensity, intensity_1, and target_points are already defined
+
+plt.figure(figsize=(10,6))
+
+
+plt.pcolormesh(X, Y, intensity)
+plt.scatter(target_points[:,0], target_points[:,1], c='g', marker='x', s=30)
+plt.scatter(x_trans, y_trans, c="y", s=40)
+plt.title("Field Intensity with Two-Layer Transducers (Attempted Standing Wave)")
+plt.xlabel("x (m)")
+plt.ylabel("y (m)")
+plt.colorbar(label="Pressure amplitude")
+
+plt.tight_layout()
+plt.show()
+

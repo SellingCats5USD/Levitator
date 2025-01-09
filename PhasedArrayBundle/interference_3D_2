@@ -1,0 +1,147 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+
+v = 343 # speed in m/s
+freq = 4e4 #40KHZ, essentially 2pi rad / s
+wavelength = v/freq   # sound wave, velocity divided by frequency
+print(f"{wavelength * 1000}mm wavelength")
+ang_freq = 2*np.pi * freq
+d = 1.5 * wavelength # distance between sources (might be called pitch if measured from center of elements)
+focus = [2*d,3*d, 2 * d] # This should be declared down in the code, dependent on global variables
+k = 2 * np.pi / wavelength # wavenumber
+N = 125 # number of points in mesh
+n = 6 # number of sources per layer
+A1 = -1 # amplitude bottom layer
+A2 = 1 # amplitude top layer
+W = max(0.5*d*n + d, focus[0]+d)
+#L = max(0.5*d*n, max(focus[0], focus[1])+5*d)  # extent of linspace in meters
+L = focus[0] + 15*d
+H = 5*d  #height of top layer of sources
+print(f"Height of sandwhich array {H * 1000:.2f} mm, = {H/wavelength:.2f} wavelengths")
+
+#create a 3D grid  
+x = np.linspace(-W, W, N)
+y = np.linspace(-W, W, N)
+z = np.linspace(0, H, N)
+X, Y, Z = np.meshgrid(x, y, z)
+
+# positions of the sources, maybe create a mesh in the x, y plane and add sources in the points?
+def bot_source_positions(n, d): # d could be any distance
+    S_bot = np.zeros((n*n, 3))
+
+    index = 0
+    for j in range(n):
+        for i in range(n):
+            x = (((n - 1) / 2) - i) * d
+            y = (((n - 1) / 2) - j) * d
+            z = 0 #i**2 for a half parabola
+            S_bot[index] = [x, y, z]
+            index += 1
+
+    return S_bot
+
+#print(bot_source_positions(5, 2.5))
+
+# positions of the sources
+def top_source_positions(n, d, H): # d could be any distance
+    S_bot = bot_source_positions(n, d)
+    S_top = np.copy(S_bot)
+
+    # Transform the z-coordinate
+    S_top[:, 2] = -S_bot[:, 2] + H
+    
+    return S_top
+
+S_bot = bot_source_positions(n, d)
+S_top = top_source_positions(n, d, H)
+
+
+print(f"Here comes S_bot {S_bot}")
+print(f"Here comes S_bot {S_top}")
+
+#phase_shifts = np.append(np.linspace(3*np.pi, 0*np.pi, n//2, endpoint=False), np.linspace(0*np.pi, 3*np.pi, n//2, endpoint=False))
+
+# Precompute distances from sources to grid points and focus
+Psi_total = np.zeros((N, N, N), dtype=np.float64)
+r_sources = []
+time_delays = []
+phase_shifts = []
+for pos in S_bot:
+    r = np.sqrt((X - pos[0])**2 + (Y - pos[1])**2 + (Z - pos[2])**2 )
+    r_sources.append(r)
+    time_delay = (np.sqrt((focus[0] - pos[0])**2 + (focus[1] - pos[1])**2 + (focus[2] - pos[2])**2))/v
+    time_delays.append(time_delay)
+    phase_shift = -ang_freq * time_delay
+    phase_shifts.append(phase_shift)
+
+r_sources_top = []
+time_delays_top = []
+phase_shifts_top = []
+for pos in S_top:
+    r = np.sqrt((X - pos[0])**2 + (Y - pos[1])**2 + (Z - pos[2])**2 )
+    r_sources.append(r)
+    time_delay_top = (np.sqrt((focus[0] - pos[0])**2 + (focus[1] - pos[1])**2 + (focus[2] - pos[2])**2))/v
+    time_delays_top.append(time_delay_top)
+    phase_shift_top = -ang_freq * time_delay_top
+    phase_shifts_top.append(phase_shift_top)
+
+for r, phase_shift in zip(r_sources, phase_shifts):
+     Psi_total = Psi_total + A1 * np.sin(k * r + phase_shift)
+Psi_total2 = Psi_total.copy()
+for r_top, phase_shift_top in zip(r_sources_top, phase_shifts_top):
+    Psi_total2 = Psi_total2 + A2 * np.sin(k * r_top + phase_shift_top)
+
+print(phase_shift)
+print(time_delays)
+print(f"{len(time_delays)} elements in time_delays")
+# Calculate intensity
+I = Psi_total2**2
+# Normalize intensity for better visualization
+I_normalized = I / I.max()
+
+
+# Mask to only plot points close to the focus point
+
+threshold_distance = 0.2 * d
+distances_to_focus = np.sqrt((X - focus[0])**2 + (Y - focus[1])**2 + (Z - focus[2])**2)
+
+#Boolean masking
+# Create a mask for points within the threshold distance
+mask = distances_to_focus < threshold_distance
+
+# Filter points and intensities 
+X_filtered = X[mask]
+Y_filtered = Y[mask]
+Z_filtered = Z[mask]
+I_filtered = I[mask]
+
+# Plot 3D,
+# Plotting a 2D slice would prob mean plotting Z = focus[2]
+fig = plt.figure(figsize=(12,8))
+ax = fig.add_subplot(111, projection="3d")
+
+sc = ax.scatter(X_filtered, Y_filtered, Z_filtered, c=I_filtered.flatten(), cmap="viridis", marker="o")
+
+cbar = plt.colorbar(sc, ax=ax, label="intensity")
+
+# Plot the source positions
+for e in S_bot:
+    ax.scatter(e[0], e[1], e[2], color="black", s=80)
+for e in S_top:
+    ax.scatter(e[0], e[1], e[2], color="black", s=80)
+
+# Plot the focus point
+ax.scatter(focus[0], focus[1], focus[2], color="red", s=30, label="Focus Point")
+# Adjust axis scaling to make spheres appear spherical
+ax.set_box_aspect([1, 1, 1])  # Equal scaling for x, y, z
+ax.set_aspect('auto')  # Makes the axes auto-adjusted
+
+# Set labels and title
+ax.set_xlabel('X (m)')
+ax.set_ylabel('Y (m)')
+ax.set_zlabel('Z (m)')
+ax.set_title(f"3D Interference Pattern from {n*n*2} Point Sources\nFocus at [{focus[0]:.2f}m, {focus[1]:.2f}m, {focus[2]:.2f}m]")
+
+plt.legend()
+plt.show()
