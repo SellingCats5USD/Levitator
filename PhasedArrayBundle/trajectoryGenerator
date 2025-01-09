@@ -8,7 +8,7 @@ import numpy as np
 density = 2
 
 # Might be multiplied by d in interference code
-focusPoints = ([-4, -4, 3], [-4, -2, 4], [-2, 2, 5],[-1, 3, 4], [2, 4, 8], [2, -2, 7], [-4, -4, 5])
+focusPoints = ([-4, -4, 8], [-4, -2, 4], [-2, 2, 5],[-1, 3, 4], [2, 4, 8], [2, -2, 7], [-4, -4, 8])
 
 
 #Linear interpolation
