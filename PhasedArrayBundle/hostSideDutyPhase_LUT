@@ -1,0 +1,78 @@
+# Control the duty cycle of several Teensy pins at once.
+# Method: USB serially to double eDMA buffers. Switch between the streamed buffers host-side.
+# WRITES TO THE C++ SKETCH
+
+import serial, time, sys
+
+# Config matching the sketch
+PORT = "COM15"
+BAUD   = 115200
+N_PINS = 6
+SLOTS  = 64 # choose 16, 32, 64 ...
+
+# runtime state
+duty  = [SLOTS//2]*N_PINS
+phase = [0]*N_PINS
+
+# _________________________
+
+def send_update(ser):
+    pkt = bytes(duty) + bytes(phase) # 12 byte packet
+    # 1) Write and flush so we know it’s on the wire
+    #ser.reset_input_buffer()
+    ser.write(pkt)
+    ser.flush()
+    ack = ser.read(1)
+    if ack:
+        print("ACK - buffer", ack[0])
+    else:
+        print("timeout / no ACK")
+
+def wait_for(byte, ser, timeout=2.0):
+    """Read until we see the wanted byte or timeout."""
+    t0 = time.time()
+    while time.time() - t0 < timeout:
+        b = ser.read(1)
+        if b == byte:    # success
+            return True
+    return False
+
+#_________________________ MAIN _______
+
+def main():
+    with serial.Serial(PORT, BAUD, timeout=1) as ser:
+        print("Opening port..")
+        time.sleep(0.2)
+
+        # ______ send slot-width once _________
+        print("Sending slot width:", SLOTS)
+        ser.reset_input_buffer()
+        ser.write(bytes([SLOTS]))    # single byte header
+        ack = ser.read(1)
+        if ack == b"\xAA":          # Teensy replies the "sentinel byte": 0xAA on success
+            print("Teensy accepted slot width")
+        else: 
+            print("Teensy already configured, or bad width") # Just keep on running if Teensy already running
+        
+        time.sleep(0.1)
+
+        print("Enter: <pinIndex> <dutyCount> <offset>  or 'q' to quit.")
+        while True:
+            line = input("> ").strip()
+            if line.lower().startswith("q"):
+                print("Exiting...")
+                break
+            
+            try:
+                pidx, dc, ph = map(int, line.split())
+            except ValueError:
+                print("need 3 ints")
+                continue
+            if not (0 <= pidx < N_PINS and 0 <= dc <= SLOTS and 0 <= ph <= SLOTS):
+                print("Out of range"); continue
+            duty[pidx] = dc
+            phase[pidx]   = ph
+            send_update(ser)
+                
+if __name__ == "__main__":
+    main()
