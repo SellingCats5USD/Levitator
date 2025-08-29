@@ -42,3 +42,5 @@ def distance(p):
     for pos in p:
         r = np.sqrt((pos[0]**2) + pos[1]**2 + pos[2]**2)
     return r
+
+print(peniscock)
